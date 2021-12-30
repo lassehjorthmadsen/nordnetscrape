@@ -1,17 +1,24 @@
 library(tidyverse)
+library(lubridate)
 library(devtools)
 library(quantmod)
 library(RQuantLib)
 library(ragtop)
 load_all()
 
+# Plotting theme
 theme_set(theme_minimal() +
             theme(strip.text = element_text(size = 7, hjust = 0)))
 
+# OMXC25 company symbols
 omxc25_companies <- read.csv2("data/omxc25.csv", check.names = F)
 
+# Stock price data set
 omx_prices_file <- "data-raw/omx_prices.rds"
 
+date_t <- Sys.Date()
+
+# Load or download the price data set
 if (file.exists(omx_prices_file)) {
 
   omx_prices <- readRDS(omx_prices_file)
@@ -37,10 +44,8 @@ if (file.exists(omx_prices_file)) {
 }
 
 # Novo example
-date_t  <-  Sys.Date()
-
 mPrice <- getSymbols("NOVO-B.CO",
-                     from = date_t - 365,
+                     from = date_t - 364, # One year's worth of data
                      to = date_t,
                      auto.assign = FALSE)
 
@@ -48,7 +53,7 @@ vPrice <- as.numeric(mPrice[, 6])  # adjusted closing prices to numeric
 vReturns <- diff(log(vPrice))      # log calculate returns in %
 dSigma_daily <- sd(vReturns)       # standard deviation
 dSigma <- dSigma_daily * sqrt(250) # annual standard deviation (250 trading days in a year)
-dS <- vPrice[251]                  # latest stock price
+dS <- vPrice[length(vPrice)]       # latest stock price
 dK <- 790                          # strike Price
 drf <- 0.01                        # Risk-free Interest Rate
 iT <- as.numeric((as.Date("2022-02-18") - date_t) / 365)  # time to Expiration (in fraction of years)
@@ -88,3 +93,20 @@ omx_clean %>%
   scale_y_continuous(labels = NULL) +
   facet_wrap(vars(`Company Name`), scale = "free_y") +
   labs(x = "", y = NULL)
+
+sigmas <- omx_clean %>%
+  filter(str_detect(metric, "Adjusted")) %>%
+  mutate(year = year(date)) %>%
+  group_by(`Company Name`, year) %>%
+  mutate(log_return = c(NA, diff(log(value)))) %>%
+  summarise(sigma_yearly = sd(log_return, na.rm = T) * sqrt(250), .groups = "drop") %>%
+  mutate(`Company Name` = fct_reorder(`Company Name`, sigma_yearly))
+
+sigmas %>%
+  ggplot(aes(y = `Company Name`, x = sigma_yearly, color = factor(year))) +
+  geom_point() +
+  facet_wrap(vars(year))
+
+sigmas %>%
+  ggplot(aes(y = `Company Name`, x = sigma_yearly)) +
+  geom_boxplot()
