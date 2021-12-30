@@ -10,13 +10,11 @@ theme_set(theme_minimal() +
 
 omx <- read.csv2("data/omxc25.csv", check.names = F)
 
-date_t      <-  Sys.Date()
-date_t_1    <-  Sys.Date() - 365
-
-# prices from Yahoo
+# prices from Yahoo, all omxc25 stocks, back from 2015
 omxPrices <- omx$Symbol %>%
   map(getSymbols, from = "2015-01-01", to = date_t, auto.assign = FALSE)
 
+# Clean and convert from xts object to tibble
 omxClean <- omxPrices %>%
   map(as.data.frame) %>%
   map(rownames_to_column, "date") %>%
@@ -27,17 +25,22 @@ omxClean <- omxPrices %>%
   mutate(company = paste0(company, ".CO")) %>%
   left_join(omx, c("company" = "Symbol"))
 
+# Novo example
+date_t  <-  Sys.Date()
 
-mPrice  <-  getSymbols("NOVO-B.CO", from = "2015-11-28", to = date_t, auto.assign = FALSE)
+mPrice <- getSymbols("NOVO-B.CO",
+                     from = date_t - 365,
+                     to = date_t,
+                     auto.assign = FALSE)
 
-vPrice <- as.numeric(mPrice[,6])   # adjusted closing prices to numeric
-vReturns <- diff(log(vPrice)[-1])  # log Calculate Returns in %
+vPrice <- as.numeric(mPrice[, 6])  # adjusted closing prices to numeric
+vReturns <- diff(log(vPrice))      # log calculate returns in %
 dSigma_daily <- sd(vReturns)       # standard deviation
 dSigma <- dSigma_daily * sqrt(250) # annual standard deviation (250 trading days in a year)
-dS <- vPrice[249]                  # latest stock price
-dK <- 700                          # strike Price
+dS <- vPrice[251]                  # latest stock price
+dK <- 790                          # strike Price
 drf <- 0.01                        # Risk-free Interest Rate
-iT <- 0.25                         # time to Expiration( In fraction of years)
+iT <- as.numeric((as.Date("2022-02-18") - date_t) / 365)  # time to Expiration (in fraction of years)
 
 price1 <- BlackScholes(dS = dS,
                        dK = dK ,
@@ -60,6 +63,11 @@ price3 <- ragtop::blackscholes(callput = 1,
                                time = iT,
                                vola = dSigma,
                                dividends = NULL)
+
+# Compare implementations
+price1
+price2$value
+price3$Price
 
 # Plot
 omxClean %>%
