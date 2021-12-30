@@ -8,22 +8,33 @@ load_all()
 theme_set(theme_minimal() +
             theme(strip.text = element_text(size = 7, hjust = 0)))
 
-omx <- read.csv2("data/omxc25.csv", check.names = F)
+omxc25_companies <- read.csv2("data/omxc25.csv", check.names = F)
 
-# prices from Yahoo, all omxc25 stocks, back from 2015
-omxPrices <- omx$Symbol %>%
-  map(getSymbols, from = "2015-01-01", to = date_t, auto.assign = FALSE)
+omx_prices_file <- "data-raw/omx_prices.rds"
 
-# Clean and convert from xts object to tibble
-omxClean <- omxPrices %>%
-  map(as.data.frame) %>%
-  map(rownames_to_column, "date") %>%
-  map(as_tibble) %>%
-  map_dfr(pivot_longer, -date) %>%
-  mutate(date = as.Date(date)) %>%
-  separate(name, into = c("company", "metric"), sep = ".CO.") %>%
-  mutate(company = paste0(company, ".CO")) %>%
-  left_join(omx, c("company" = "Symbol"))
+if (file.exists(omx_prices_file)) {
+
+  omx_prices <- readRDS(omx_prices_file)
+
+  } else {
+
+  # prices from Yahoo
+  omx_prices <- omxc25_companies$Symbol %>%
+    map(getSymbols, from = "2015-01-01", to = date_t, auto.assign = FALSE)
+
+  # Clean and convert from xts object to tibble
+  omx_clean <- omx_prices %>%
+    map(as.data.frame) %>%
+    map(rownames_to_column, "date") %>%
+    map(as_tibble) %>%
+    map_dfr(pivot_longer, -date) %>%
+    mutate(date = as.Date(date)) %>%
+    separate(name, into = c("company", "metric"), sep = ".CO.") %>%
+    mutate(company = paste0(company, ".CO")) %>%
+    left_join(omxc25_companies, c("company" = "Symbol"))
+
+  saveRDS(omx_clean, omx_prices_file)
+}
 
 # Novo example
 date_t  <-  Sys.Date()
@@ -70,15 +81,10 @@ price2$value
 price3$Price
 
 # Plot
-omxClean %>%
+omx_clean %>%
   filter(str_detect(metric, "Adjusted")) %>%
   ggplot(aes(x = date, y = value, color = `Company Name`)) +
   geom_line(show.legend = F) +
   scale_y_continuous(labels = NULL) +
   facet_wrap(vars(`Company Name`), scale = "free_y") +
   labs(x = "", y = NULL)
-
-
-
-
-
